@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>无法完成操作 · 档案词频阅览包</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem;
+    font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f5f4ef; color: #2b2b2b; line-height: 1.65;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; }
+  .panel { border-radius: 8px; padding: 1rem 1.2rem; margin: 1.2rem 0;
+           background: #fbeeec; border: 1px solid #d9a49c; }
+  code {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    background: rgba(0,0,0,.06); border-radius: 4px; padding: .1em .35em;
+    word-break: break-all;
+  }
+  a.back { color: #6f5830; }
+</style>
+</head>
+<body>
+<main>
+  <h1>无法完成操作</h1>
+  <div class="panel">
+    <p>{{ message }}</p>
+    <p>若多次出现，请回到制包首页重新生成阅览包，或换用完整的包文件重试。</p>
+  </div>
+  <p><a class="back" href="/viewer">← 返回阅览页</a> ·
+     <a class="back" href="/">制包首页</a></p>
+</main>
+</body>
+</html>

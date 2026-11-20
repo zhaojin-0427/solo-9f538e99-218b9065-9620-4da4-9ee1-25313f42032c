@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>阅览页 · 档案词频阅览包</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem;
+    font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f5f4ef; color: #2b2b2b; line-height: 1.65;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #8a6d3b; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.6rem; }
+  fieldset {
+    border: 1px solid #cfc8b8; border-radius: 8px; background: #fffdf8;
+    margin: 1.2rem 0; padding: 1rem 1.2rem 1.2rem;
+  }
+  legend { font-weight: 700; padding: 0 .4rem; }
+  label { display: block; margin: .6rem 0; }
+  label span { display: inline-block; min-width: 15rem; }
+  input[type=text] {
+    font-size: 1rem; padding: .35rem .5rem; border: 1px solid #b9b2a2;
+    border-radius: 4px; min-width: 18rem;
+  }
+  button {
+    margin-top: .6rem; padding: .6rem 2.2rem; font-size: 1.05rem;
+    background: #8a6d3b; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+  }
+  button:hover { background: #6f5830; }
+  table { border-collapse: collapse; margin: .8rem 0; }
+  th, td { border: 1px solid #c9c2b2; padding: .35rem .9rem; text-align: left; }
+  th { background: #efece3; }
+  .panel { border-radius: 8px; padding: .8rem 1.2rem; margin: 1.2rem 0;
+           background: #eef6ea; border: 1px solid #9cc48f; }
+  .hint { color: #6f5830; font-size: .95rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>阅览页 · 按词查页</h1>
+
+  {% if pack %}
+  <div class="panel">
+    <h2>已载入阅览包</h2>
+    <table>
+      <tr><th>页数</th><th>词表词数</th><th>非零记录</th><th>数据块</th></tr>
+      <tr><td>{{ pack.pages }}</td><td>{{ pack.words }}</td>
+          <td>{{ pack.nnz }}</td><td>{{ pack.blocks }}</td></tr>
+    </table>
+  </div>
+
+  <form method="get" action="/viewer/query">
+    <input type="hidden" name="pack" value="{{ pack.token }}">
+    <fieldset>
+      <legend>查询</legend>
+      <label><span>要查询的词</span>
+        <input type="text" name="word" required autofocus></label>
+      <label><span>起始页键（可选；从该键之后开始列）</span>
+        <input type="text" name="start"></label>
+    </fieldset>
+    <button type="submit">查询</button>
+    <p class="hint">按页键顺序列出前 100 个非零页及计数，并标明有无后续；
+       词表中没有的词与全卷计数为零的词将分别提示。</p>
+  </form>
+  <p><a href="/viewer">← 重新上传阅览包</a></p>
+  {% else %}
+  <p>上传制包页生成的<strong>单文件阅览包</strong>（ZIP），即可按词查询非零扫描页。</p>
+  <form method="post" action="/viewer/upload" enctype="multipart/form-data">
+    <fieldset>
+      <legend>上传阅览包</legend>
+      <label><span>阅览包 ZIP</span>
+        <input type="file" name="pack" required></label>
+    </fieldset>
+    <button type="submit">上传</button>
+  </form>
+  <p class="hint">还没有阅览包？<a href="/">到制包首页生成 →</a></p>
+  {% endif %}
+</main>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>查询结果 · 档案词频阅览包</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem;
+    font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f5f4ef; color: #2b2b2b; line-height: 1.65;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.1rem; }
+  .panel { border-radius: 8px; padding: 1rem 1.2rem; margin: 1.2rem 0; }
+  .ok    { background: #eef6ea; border: 1px solid #9cc48f; }
+  .warn  { background: #fdf3e0; border: 1px solid #dfc27a; }
+  code {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    background: rgba(0,0,0,.06); border-radius: 4px; padding: .1em .35em;
+    word-break: break-all;
+  }
+  table { border-collapse: collapse; margin: .8rem 0; }
+  th, td { border: 1px solid #c9c2b2; padding: .35rem .9rem; text-align: left; }
+  th { background: #efece3; }
+  td.num { text-align: right; color: #777; }
+  a.btn {
+    display: inline-block; margin-top: .4rem; padding: .55rem 1.6rem;
+    background: #4a7a3a; color: #fff; text-decoration: none; border-radius: 6px;
+  }
+  a.btn:hover { background: #3b6330; }
+  a.back { color: #6f5830; }
+</style>
+</head>
+<body>
+<main>
+  <h1>查询结果</h1>
+
+  {% if status == 'not_in_vocab' %}
+  <div class="panel warn">
+    <h2>词表中没有该词</h2>
+    <p>词 <code>{{ word }}</code> 不在本卷词表中，请核对拼写后重试。</p>
+  </div>
+
+  {% elif status == 'zero' %}
+  <div class="panel warn">
+    <h2>全卷计数为零</h2>
+    <p>词 <code>{{ word }}</code> 在词表中，但全卷计数为零：任何页都没有它的非零记录。</p>
+  </div>
+
+  {% elif status == 'bad_start' %}
+  <div class="panel warn">
+    <h2>起始页键不存在</h2>
+    <p>起始页键 <code>{{ start }}</code> 不在本卷页键表中，请核对后重试。</p>
+  </div>
+
+  {% else %}
+  <div class="panel ok">
+    <p>词 <code>{{ word }}</code>：全卷共 <strong>{{ total_pages }}</strong> 页有非零计数，
+       总词频 <strong>{{ total_freq }}</strong>。</p>
+    <p>{% if start %}本页从起始页键 <code>{{ start }}</code> 之后开始。{% else %}本页从头开始。{% endif %}</p>
+  </div>
+
+  {% if results %}
+  <table>
+    <tr><th>#</th><th>页键</th><th>计数</th></tr>
+    {% for page, count in results %}
+    <tr><td class="num">{{ loop.index }}</td><td>{{ page }}</td><td>{{ count }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>起始键之后没有该词的非零记录。</p>
+  {% endif %}
+
+  {% if has_more %}
+  <p><strong>还有后续结果。</strong>
+     <a class="btn" href="{{ url_for('viewer_query', pack=token, word=word, start=results[-1][0]) }}">下一页（从 {{ results[-1][0] }} 之后）→</a></p>
+  {% else %}
+  <p>没有更多结果。</p>
+  {% endif %}
+  {% endif %}
+
+  <p><a class="back" href="{{ url_for('viewer', pack=token) }}">← 返回查询页</a> ·
+     <a class="back" href="/">制包首页</a></p>
+</main>
+</body>
+</html>

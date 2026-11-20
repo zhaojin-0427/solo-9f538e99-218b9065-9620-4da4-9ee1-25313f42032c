@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>制包结果 · 档案词频阅览包</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem;
+    font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f5f4ef; color: #2b2b2b; line-height: 1.65;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.1rem; }
+  .panel { border-radius: 8px; padding: 1rem 1.2rem; margin: 1.2rem 0; }
+  .error { background: #fbeeec; border: 1px solid #d9a49c; }
+  .ok    { background: #eef6ea; border: 1px solid #9cc48f; }
+  code {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    background: rgba(0,0,0,.06); border-radius: 4px; padding: .1em .35em;
+    word-break: break-all;
+  }
+  table { border-collapse: collapse; margin: .8rem 0; }
+  th, td { border: 1px solid #c9c2b2; padding: .35rem .9rem; text-align: left; }
+  th { background: #efece3; }
+  a.btn {
+    display: inline-block; margin-top: .6rem; padding: .6rem 1.8rem;
+    background: #4a7a3a; color: #fff; text-decoration: none; border-radius: 6px;
+    font-size: 1.05rem;
+  }
+  a.btn:hover { background: #3b6330; }
+  a.back { color: #6f5830; }
+</style>
+</head>
+<body>
+<main>
+  <h1>制包结果</h1>
+
+  {% if errors %}
+  <div class="panel error">
+    <h2>数据格式有误，无法制包</h2>
+    <ul>
+      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div class="panel ok">
+    <h2>阅览包已完整生成 ✔</h2>
+    <table>
+      <tr><th>矩阵维度</th><th>声明非零项</th><th>合计后非零记录</th>
+          <th>页数</th><th>词数（去重）</th><th>数据块</th></tr>
+      <tr><td>{{ ds.rows }}×{{ ds.cols }}</td><td>{{ ds.nnz }}</td>
+          <td>{{ stats.nnz }}</td><td>{{ stats.pages }}</td>
+          <td>{{ stats.words }}</td><td>{{ stats.blocks }}</td></tr>
+    </table>
+    <p>重复坐标与同词多列已按原口径合计；每块最多 512 条非零记录，可独立解压。</p>
+    <p><a class="btn" href="{{ download_url }}">下载阅览包（wordfreq-pack.zip）</a></p>
+    <p>下载后可到<a href="/viewer">阅览页</a>上传该包，按词查询非零扫描页。</p>
+  </div>
+  {% endif %}
+
+  <p><a class="back" href="/">← 返回制包首页</a></p>
+</main>
+</body>
+</html>

@@ -1,6 +1,7 @@
 %%MatrixMarket matrix coordinate integer general
-% 旧 OCR 导出示例：页×词（行=页，列=词）
+% 词频矩阵示例：页×词（行=页，列=词）
 % 词表含重复词 apple（第 1、3 列），含重复坐标与显式 0
+% p4 为全零页，cherry 为全零词
 4 4 8
 3 2 2
 1 1 1

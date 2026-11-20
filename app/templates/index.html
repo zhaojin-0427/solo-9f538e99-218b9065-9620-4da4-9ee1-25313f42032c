@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>档案馆检索索引核对</title>
+<title>档案词频阅览包 · 制包</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -32,57 +32,55 @@
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     background: #efece3; border-radius: 4px; padding: .1em .35em;
   }
-  pre { padding: .8rem 1rem; overflow-x: auto; }
   .doc { background: #fffdf8; border: 1px solid #cfc8b8; border-radius: 8px; padding: .2rem 1.2rem 1rem; margin-top: 2rem; }
   .doc li { margin: .3rem 0; }
 </style>
 </head>
 <body>
 <main>
-  <h1>档案馆检索索引核对</h1>
-  <p>上传<strong>同一册</strong>的两套导出数据：旧 OCR 导出（<strong>页×词</strong>）与新软件导出（<strong>词×页</strong>）。
-     系统将按页键与词对齐核对，确认两套数据能否重建同一检索索引；
-     核对一致后可下载重新整理为旧格式（页×词）的 ZIP 包。</p>
+  <h1>档案词频阅览包 · 制包</h1>
+  <p>外馆拿到档案词频后，需要能<strong>按词找到对应的扫描页</strong>。本页把一套
+     <strong>页×词</strong> 词频矩阵及配套的页键、词表 CSV 制成<strong>单文件阅览包</strong>；
+     此后在<a href="/viewer">阅览页</a>上传该包，输入词（可选填起始页键）即可按页键顺序
+     列出该词出现的页及计数。</p>
 
-  <form method="post" action="/verify" enctype="multipart/form-data">
+  <form method="post" action="/pack" enctype="multipart/form-data">
     <fieldset>
-      <legend>旧导出（页×词）</legend>
+      <legend>词频数据（一套）</legend>
       <label><span>矩阵 matrix.mtx（行=页，列=词）</span>
-        <input type="file" name="old_matrix" required></label>
+        <input type="file" name="matrix" required></label>
       <label><span>页键 CSV（与矩阵行一一对应）</span>
-        <input type="file" name="old_pages" required></label>
+        <input type="file" name="pages" required></label>
       <label><span>词表 CSV（与矩阵列一一对应）</span>
-        <input type="file" name="old_words" required></label>
+        <input type="file" name="words" required></label>
     </fieldset>
-    <fieldset>
-      <legend>新导出（词×页）</legend>
-      <label><span>矩阵 matrix.mtx（行=词，列=页）</span>
-        <input type="file" name="new_matrix" required></label>
-      <label><span>页键 CSV（与矩阵列一一对应）</span>
-        <input type="file" name="new_pages" required></label>
-      <label><span>词表 CSV（与矩阵行一一对应）</span>
-        <input type="file" name="new_words" required></label>
-    </fieldset>
-    <button type="submit">开始核对</button>
+    <button type="submit">制成阅览包</button>
   </form>
 
+  <p>已有阅览包？<a href="/viewer">前往阅览页查询 →</a></p>
+
   <section class="doc">
-    <h2>格式要求</h2>
+    <h2>输入格式</h2>
     <ul>
       <li><strong>矩阵</strong>：Matrix Market 通用整数坐标格式，首行为
         <code>%%MatrixMarket matrix coordinate integer general</code>；
         注释行以 <code>%</code> 开头；随后是维度行 <code>行数 列数 非零项数</code>；
         再往后每行一个条目 <code>行号 列号 计数</code>（编号从 1 开始，计数为非负整数）。
-        未写出的坐标按 0 计；重复坐标将合计。</li>
-      <li><strong>旧导出</strong>矩阵为 页×词（行=页，列=词）；<strong>新导出</strong>矩阵为 词×页（行=词，列=页）。
-        矩阵行列数必须与对应 CSV 的行数一致。</li>
-      <li><strong>页键 CSV / 词表 CSV</strong>：UTF-8 编码、单列、无表头，每行一个值，
-        顺序与矩阵对应轴一致。页键必须唯一；词允许重复（同词的多行/多列将合计）。</li>
-      <li>核对内容：两套数据的页键集合、词集合（含全零的页与词）以及每个
-        （页， 词）坐标的计数。发现缺页、缺词或计数不同时，页面将指出一处差异。</li>
-      <li>核对一致后提供 ZIP 下载，内含按页键与词排序、重新编号的
-        <code>matrix.mtx</code>（页×词）及配套 <code>pages.csv</code>、<code>words.csv</code>，
-        解压后即可作为旧格式再次上传核对。</li>
+        行对应页、列对应词；未写出的坐标按 0 计；<strong>重复坐标将合计</strong>。</li>
+      <li><strong>页键 CSV</strong>：UTF-8 编码、单列、无表头，每行一个页键，
+        顺序与矩阵行一一对应；页键必须唯一。</li>
+      <li><strong>词表 CSV</strong>：格式同上，顺序与矩阵列一一对应；
+        词<strong>允许重复</strong>（同词的多列将按原口径合计）。</li>
+    </ul>
+    <h2>阅览包</h2>
+    <ul>
+      <li>单文件 ZIP：<code>manifest.json</code>（排序后的页键表、词表、块清单及各块
+        SHA-256）+ 若干数据块 <code>blocks/NNNNNN.z</code>。</li>
+      <li>每块最多存 <strong>512 条非零记录</strong>，独立压缩、可独立解压；一词可跨块。</li>
+      <li>查询只解压本页结果所需的块；所需块缺失或未通过完整性校验时整页报错，
+        无关的块损坏不影响查询。</li>
+      <li>制包全程流式读写，<strong>内存占用不随非零项数增长</strong>；
+        包完整生成（原子改名）后才提供下载。</li>
     </ul>
   </section>
 </main>
