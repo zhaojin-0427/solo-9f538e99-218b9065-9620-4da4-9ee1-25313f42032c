@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>档案馆检索索引核对</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem;
+    font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f5f4ef; color: #2b2b2b; line-height: 1.65;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #8a6d3b; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; }
+  fieldset {
+    border: 1px solid #cfc8b8; border-radius: 8px; background: #fffdf8;
+    margin: 1.2rem 0; padding: 1rem 1.2rem 1.2rem;
+  }
+  legend { font-weight: 700; padding: 0 .4rem; }
+  label { display: block; margin: .6rem 0; }
+  label span { display: inline-block; min-width: 13rem; }
+  input[type=file] { font-size: .95rem; }
+  button {
+    margin-top: .6rem; padding: .6rem 2.2rem; font-size: 1.05rem;
+    background: #8a6d3b; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+  }
+  button:hover { background: #6f5830; }
+  code, pre {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    background: #efece3; border-radius: 4px; padding: .1em .35em;
+  }
+  pre { padding: .8rem 1rem; overflow-x: auto; }
+  .doc { background: #fffdf8; border: 1px solid #cfc8b8; border-radius: 8px; padding: .2rem 1.2rem 1rem; margin-top: 2rem; }
+  .doc li { margin: .3rem 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>档案馆检索索引核对</h1>
+  <p>上传<strong>同一册</strong>的两套导出数据：旧 OCR 导出（<strong>页×词</strong>）与新软件导出（<strong>词×页</strong>）。
+     系统将按页键与词对齐核对，确认两套数据能否重建同一检索索引；
+     核对一致后可下载重新整理为旧格式（页×词）的 ZIP 包。</p>
+
+  <form method="post" action="/verify" enctype="multipart/form-data">
+    <fieldset>
+      <legend>旧导出（页×词）</legend>
+      <label><span>矩阵 matrix.mtx（行=页，列=词）</span>
+        <input type="file" name="old_matrix" required></label>
+      <label><span>页键 CSV（与矩阵行一一对应）</span>
+        <input type="file" name="old_pages" required></label>
+      <label><span>词表 CSV（与矩阵列一一对应）</span>
+        <input type="file" name="old_words" required></label>
+    </fieldset>
+    <fieldset>
+      <legend>新导出（词×页）</legend>
+      <label><span>矩阵 matrix.mtx（行=词，列=页）</span>
+        <input type="file" name="new_matrix" required></label>
+      <label><span>页键 CSV（与矩阵列一一对应）</span>
+        <input type="file" name="new_pages" required></label>
+      <label><span>词表 CSV（与矩阵行一一对应）</span>
+        <input type="file" name="new_words" required></label>
+    </fieldset>
+    <button type="submit">开始核对</button>
+  </form>
+
+  <section class="doc">
+    <h2>格式要求</h2>
+    <ul>
+      <li><strong>矩阵</strong>：Matrix Market 通用整数坐标格式，首行为
+        <code>%%MatrixMarket matrix coordinate integer general</code>；
+        注释行以 <code>%</code> 开头；随后是维度行 <code>行数 列数 非零项数</code>；
+        再往后每行一个条目 <code>行号 列号 计数</code>（编号从 1 开始，计数为非负整数）。
+        未写出的坐标按 0 计；重复坐标将合计。</li>
+      <li><strong>旧导出</strong>矩阵为 页×词（行=页，列=词）；<strong>新导出</strong>矩阵为 词×页（行=词，列=页）。
+        矩阵行列数必须与对应 CSV 的行数一致。</li>
+      <li><strong>页键 CSV / 词表 CSV</strong>：UTF-8 编码、单列、无表头，每行一个值，
+        顺序与矩阵对应轴一致。页键必须唯一；词允许重复（同词的多行/多列将合计）。</li>
+      <li>核对内容：两套数据的页键集合、词集合（含全零的页与词）以及每个
+        （页， 词）坐标的计数。发现缺页、缺词或计数不同时，页面将指出一处差异。</li>
+      <li>核对一致后提供 ZIP 下载，内含按页键与词排序、重新编号的
+        <code>matrix.mtx</code>（页×词）及配套 <code>pages.csv</code>、<code>words.csv</code>，
+        解压后即可作为旧格式再次上传核对。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,14 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # 下载链接的有效期（秒）
+      DOWNLOAD_TTL_SECONDS: "3600"
+    volumes:
+      - workdata:/data
+    restart: unless-stopped
+
+volumes:
+  workdata:
