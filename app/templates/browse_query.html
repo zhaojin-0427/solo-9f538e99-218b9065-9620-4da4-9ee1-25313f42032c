@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}按词阅览 · 档案馆检索索引{% endblock %}
+{% block heading %}按词查扫描页{% endblock %}
+{% block content %}
+  <p>上传<a href="/build">阅览包</a>，输入一个词，即可按页键列出该词出现的非零页及计数。
+     可填写<strong>起始页键</strong>，只列出该页之后的页；每次最多列前 100 个，并标明有无后续。
+     查询只解压本次结果所需的块。</p>
+
+  {% if errors %}
+  <div class="panel error">
+    <h2>查询未完成</h2>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if result %}
+    {% if result.status == 'not_in_vocabulary' %}
+    <div class="panel warn">
+      <h2>词表中没有这个词</h2>
+      <p>词 <code>{{ result.word }}</code> 不在本包的词表中（共 {{ result.vocabulary_size }} 个不同的词）。
+         可能是该词从未收录，或与词表写法不一致。</p>
+    </div>
+    {% elif result.status == 'zero_total' %}
+    <div class="panel warn">
+      <h2>词在全卷计数为零</h2>
+      <p>词 <code>{{ result.word }}</code> 在词表第 {{ result.word_number }} 位（确有收录），
+         但全卷没有任何页出现该词（所有页计数为 0），因此没有可列出的扫描页。</p>
+    </div>
+    {% elif result.status == 'none_after_start' %}
+    <div class="panel warn">
+      <h2>起始页键之后没有该词</h2>
+      <p>词 <code>{{ result.word }}</code> 在全卷共出现于 <strong>{{ result.total_nonzero }}</strong> 个页，
+         但都在起始页键 <code>{{ result.start_page_key }}</code> 及其之前（起始页键本身不包含在内）。</p>
+    </div>
+    {% else %}
+    <div class="panel ok">
+      <h2>查询结果：<code>{{ result.word }}</code></h2>
+      <p>本词共出现于 <strong>{{ result.total_nonzero }}</strong> 个非零页；
+         {% if result.start_page_key %}起始页键 <code>{{ result.start_page_key }}</code> 之后{% else %}从头开始{% endif %}
+         尚有 <strong>{{ result.matched_total }}</strong> 个，
+         本次列出前 <strong>{{ result.rows|length }}</strong> 个（每次最多 {{ result.limit }} 个）。
+         {% if result.has_more %}<strong>还有后续页。</strong>
+           可把起始页键填为本次最后一个页键，继续看下一页结果。
+         {% else %}<strong>已到末尾，没有后续。</strong>{% endif %}</p>
+      <table>
+        <tr><th>#</th><th>页键</th><th>计数</th></tr>
+        {% for row in result.rows %}
+        <tr><td>{{ loop.index }}</td><td><code>{{ row.page_key }}</code></td>
+            <td>{{ row.count }}</td></tr>
+        {% endfor %}
+      </table>
+      <p class="hint">本词覆盖 {{ result.block_count_used }} / {{ result.block_count }} 块；
+         仅解压并校验了这些块。</p>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <form method="post" action="/browse/query" enctype="multipart/form-data">
+    <fieldset>
+      <legend>查询</legend>
+      <label><span>阅览包（.zip）</span>
+        <input type="file" name="package" accept=".zip,application/zip" required></label>
+      <label><span>词</span>
+        <input type="text" name="word" value="{{ word or '' }}" required></label>
+      <label><span>起始页键（可选）</span>
+        <input type="text" name="start_page" value="{{ start_key or '' }}"
+               placeholder="留空则从第一页开始"></label>
+    </fieldset>
+    <button type="submit">查询</button>
+  </form>
+
+  <section class="doc">
+    <h2>查询规则</h2>
+    <ul>
+      <li>页键按包内排序；填写起始页键时<strong>不包含</strong>该页，只列其后的页。</li>
+      <li>每次最多列出 100 个非零页及计数，并标明是否还有后续页。</li>
+      <li>词表中没有的词，与在词表中但<strong>全卷计数为零</strong>的词，分别提示。</li>
+      <li>只解压并校验本次结果所需的块；所需块缺失或完整性校验失败时整页报错，
+          与该词无关的块损坏不影响查询。</li>
+    </ul>
+  </section>
+{% endblock %}

@@ -6,6 +6,7 @@
 """
 
 import io
+import json
 import os
 import re
 import site
@@ -15,6 +16,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.join(os.path.dirname(HERE), "app")
+EXAMPLES = os.path.join(os.path.dirname(HERE), "examples")
 sys.path.insert(0, APP_DIR)
 # -I 模式不含用户级 site-packages，显式加回（Flask 安装在那里）
 sys.path.append(site.getusersitepackages())
@@ -230,6 +232,336 @@ def t_download_guards():
     client = app.test_client()
     assert client.get("/download/nonexistent-token").status_code == 404
     assert client.get("/download/..%2F..%2Fetc").status_code == 404
+    assert client.get("/download/browse/nonexistent-token").status_code == 404
+    assert client.get("/download/browse/..%2F..%2Fetc").status_code == 404
+
+
+# ---------------------------------------------------------------- 阅览包
+
+def build_browse(client, files=None):
+    """调用制包页，返回 (zipfile.ZipFile, html)。"""
+    files = files or {
+        "matrix": open(os.path.join(EXAMPLES, "old", "matrix.mtx"), "rb").read(),
+        "pages": open(os.path.join(EXAMPLES, "old", "pages.csv"), "rb").read(),
+        "words": open(os.path.join(EXAMPLES, "old", "words.csv"), "rb").read(),
+    }
+    data = {k: (io.BytesIO(v), k + ".dat") for k, v in files.items()}
+    resp = client.post("/browse/build", data=data,
+                       content_type="multipart/form-data")
+    return resp
+
+
+def post_query(client, raw, word, start=""):
+    data = {"package": (io.BytesIO(raw), "pkg.zip"), "word": word,
+            "start_page": start}
+    return client.post("/browse/query", data=data,
+                       content_type="multipart/form-data")
+
+
+def t_browse_build_and_query():
+    client = app.test_client()
+    resp = build_browse(client)
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200 and "阅览包已生成" in html, html
+    m = re.search(r'/download/browse/([A-Za-z0-9_-]+)', html)
+    assert m, html
+    raw = client.get("/download/browse/" + m.group(1)).data
+    zf = zipfile.ZipFile(io.BytesIO(raw))
+    assert sorted(zf.namelist()) == [
+        "blocks/1.csv", "manifest.json", "pages.csv", "words.csv"], zf.namelist()
+    manifest = json.loads(zf.read("manifest.json"))
+    assert manifest["format"] == matrixio.BROWSE_FORMAT
+    assert manifest["nnz"] == 4 and manifest["pages_count"] == 4
+    assert zf.read("pages.csv").decode() == "p1\np2\np3\np4\n"
+    assert zf.read("words.csv").decode() == "apple\nbanana\ncherry\n"
+    # 同词 apple 的两列（例中第 1、3 列）合计：p1=3, p2=2
+    lines = zf.read("blocks/1.csv").decode().splitlines()
+    assert lines == ["1,1,3", "1,2,2", "2,1,1", "2,3,5"], lines
+
+    html = post_query(client, raw, "apple").get_data(as_text=True)
+    assert "查询结果" in html and ">2</strong> 个非零页" in html, html
+    assert "<code>p1</code>" in html and "<code>p2</code>" in html
+    body = html.split("<table>")[1].split("</table>")[0]
+    assert body.index("p1") < body.index("p2")
+    assert "<td>3</td>" in body and "<td>2</td>" in body
+    assert "已到末尾，没有后续" in html
+    assert "1 / 1 块" in html
+
+
+def t_browse_query_start_and_limits():
+    """起始页键之后开始，最多 100 个，并标明有无后续。"""
+    client = app.test_client()
+    raw = _browse_raw(client)
+    html = post_query(client, raw, "apple", "p1").get_data(as_text=True)
+    assert "起始页键 <code>p1</code> 之后" in html
+    body = html.split("<table>")[1].split("</table>")[0]
+    assert "<code>p2</code>" in body and "<code>p1</code>" not in body
+    # 起始页键在词的所有出现之后
+    html = post_query(client, raw, "apple", "p2").get_data(as_text=True)
+    assert "起始页键之后没有该词" in html
+    assert "2</strong> 个页" in html
+    # 起始页键不在包中
+    html = post_query(client, raw, "apple", "p9").get_data(as_text=True)
+    assert "不在本包的页键表中" in html
+    # 分页：造一个 130 页都含该词的包
+    P = 130
+    mtx = mtx_bytes(P, 1, [(i, 1, i) for i in range(1, P + 1)])
+    pages = [f"page-{i:03d}" for i in range(1, P + 1)]
+    files = {
+        "matrix": mtx,
+        "pages": ("\n".join(pages) + "\n").encode(),
+        "words": b"target\n",
+    }
+    raw = _browse_raw(client, files)
+    html = post_query(client, raw, "target").get_data(as_text=True)
+    body = html.split("<table>")[1].split("</table>")[0]
+    assert body.count("<tr>") == 101, body.count("<tr>")  # 含表头行
+    assert "还有后续页" in html
+    assert "page-100" in body and "page-101" not in body
+    # 从第 100 页之后继续
+    html = post_query(client, raw, "target", "page-100").get_data(as_text=True)
+    body = html.split("<table>")[1].split("</table>")[0]
+    assert body.count("<tr>") == 31, body.count("<tr>")  # 30 行 + 表头
+    assert "page-101" in body and "page-130" in body
+    assert "已到末尾，没有后续" in html
+
+
+def t_browse_not_in_vocab_vs_zero_total():
+    client = app.test_client()
+    raw = _browse_raw(client)
+    html = post_query(client, raw, "zebra").get_data(as_text=True)
+    assert "词表中没有这个词" in html
+    assert "zebra" in html
+    html = post_query(client, raw, "cherry").get_data(as_text=True)
+    assert "词在全卷计数为零" in html
+    assert "词表中没有这个词" not in html
+    assert "cherry" in html
+
+
+def t_browse_block_spans_words():
+    """每块至多 512 条；一个词可以跨块，查询合并各块。"""
+    old = matrixio.BLOCK_MAX_ROWS
+    matrixio.BLOCK_MAX_ROWS = 2
+    try:
+        client = app.test_client()
+        files = {
+            "matrix": mtx_bytes(3, 2, [(1, 1, 1), (2, 1, 2), (3, 2, 3),
+                                       (1, 2, 4), (3, 1, 5)]),
+            "pages": b"p1\np2\np3\n",
+            "words": b"w0\nw1\n",
+        }
+        resp = client.post(
+            "/browse/build",
+            data={k: (io.BytesIO(v), k) for k, v in files.items()},
+            content_type="multipart/form-data")
+        html = resp.get_data(as_text=True)
+        m = re.search(r'/download/browse/([A-Za-z0-9_-]+)', html)
+        raw = client.get("/download/browse/" + m.group(1)).data
+        manifest = json.loads(zipfile.ZipFile(io.BytesIO(raw))
+                              .read("manifest.json"))
+        assert len(manifest["blocks"]) == 3, manifest["blocks"]
+        assert manifest["blocks"][0]["last_word"] == 1 and \
+            manifest["blocks"][1]["first_word"] == 1, manifest["blocks"]
+        assert all(b["rows"] <= 2 for b in manifest["blocks"])
+        # w0 覆盖块 1、2（跨块），合并后 p1=1 p2=2 p3=5
+        html = post_query(client, raw, "w0").get_data(as_text=True)
+        body = html.split("<table>")[1].split("</table>")[0]
+        assert "<code>p1</code>" in body and "<code>p2</code>" in body
+        assert "<td>1</td>" in body and "<td>2</td>" in body
+        assert "<td>5</td>" in body
+        assert "2 / 3 块" in html
+    finally:
+        matrixio.BLOCK_MAX_ROWS = old
+
+
+def t_browse_corrupt_blocks():
+    """所需块损坏 -> 整页报错；无关块损坏 -> 仍可查询。"""
+    client = app.test_client()
+    raw = _browse_raw(client)
+    manifest = json.loads(zipfile.ZipFile(io.BytesIO(raw)).read("manifest.json"))
+    block_name = manifest["blocks"][0]["name"]
+
+    def broken(name, mutate):
+        out = io.BytesIO()
+        src = zipfile.ZipFile(io.BytesIO(raw))
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+            for info in src.infolist():
+                data = src.read(info.filename)
+                if info.filename == name:
+                    data = mutate(data)
+                zf.writestr(info.filename, data)
+        return out.getvalue()
+
+    # 所需块内容被改坏
+    bad = broken(block_name, lambda d: d.replace(b"3", b"9", 1))
+    resp = post_query(client, bad, "apple")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 422 and "完整性校验失败" in html, html
+    assert "<table>" not in html
+    # 所需块被删掉
+    out = io.BytesIO()
+    src = zipfile.ZipFile(io.BytesIO(raw))
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        for info in src.infolist():
+            if info.filename != block_name:
+                zf.writestr(info.filename, src.read(info.filename))
+    resp = post_query(client, out.getvalue(), "apple")
+    assert resp.status_code == 422
+    assert "包不完整" in resp.get_data(as_text=True)
+    # 无关块损坏（本例只有一个块，另造一个多块包）
+    big = {"matrix": mtx_bytes(3, 2, [(1, 1, 1), (2, 1, 2), (3, 2, 3),
+                                      (1, 2, 4)]),
+           "pages": b"p1\np2\np3\n", "words": b"w0\nw1\n"}
+    old = matrixio.BLOCK_MAX_ROWS
+    matrixio.BLOCK_MAX_ROWS = 2
+    try:
+        raw2 = _browse_raw(client, big)
+    finally:
+        matrixio.BLOCK_MAX_ROWS = old
+    m2 = json.loads(zipfile.ZipFile(io.BytesIO(raw2)).read("manifest.json"))
+    # 改坏最后一块（w1 所在），查询 w0 不受影响
+    bad2 = broken_call(raw2, m2["blocks"][-1]["name"])
+    html = post_query(client, bad2, "w0").get_data(as_text=True)
+    assert "查询结果" in html and "<code>p1</code>" in html, html
+    # 而查询 w1 时整页报错
+    resp = post_query(client, bad2, "w1")
+    assert resp.status_code == 422
+    # 非 ZIP
+    resp = post_query(client, b"not a zip at all", "apple")
+    assert resp.status_code == 422
+    assert "不是有效的 ZIP" in resp.get_data(as_text=True)
+
+
+def broken_call(raw, name):
+    out = io.BytesIO()
+    src = zipfile.ZipFile(io.BytesIO(raw))
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == name:
+                data = data.replace(b",", b";", 1)
+            zf.writestr(info.filename, data)
+    return out.getvalue()
+
+
+def t_browse_manifest_guards():
+    client = app.test_client()
+    raw = _browse_raw(client)
+    manifest = json.loads(zipfile.ZipFile(io.BytesIO(raw)).read("manifest.json"))
+
+    def rewrap(m):
+        out = io.BytesIO()
+        src = zipfile.ZipFile(io.BytesIO(raw))
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+            for info in src.infolist():
+                data = src.read(info.filename)
+                if info.filename == "manifest.json":
+                    data = json.dumps(m, ensure_ascii=False).encode()
+                zf.writestr(info.filename, data)
+        return out.getvalue()
+
+    m = dict(manifest); m["format"] = "other"
+    assert "不是本工具的阅览包" in post_query(
+        client, rewrap(m), "apple").get_data(as_text=True)
+    m = dict(manifest); m["version"] = 99
+    assert "不支持的阅览包版本" in post_query(
+        client, rewrap(m), "apple").get_data(as_text=True)
+    m = dict(manifest); m["nnz"] = 999
+    assert "包不完整" in post_query(
+        client, rewrap(m), "apple").get_data(as_text=True)
+    m = dict(manifest); m["words_sha256"] = "0" * 64
+    assert "完整性校验失败" in post_query(
+        client, rewrap(m), "apple").get_data(as_text=True)
+
+
+def t_browse_build_errors():
+    client = app.test_client()
+    files = {
+        "matrix": mtx_bytes(4, 4, [(1, 1, -1)]),
+        "pages": b"p1\np2\np3\np4\n",
+        "words": b"a\nb\nc\nd\n",
+    }
+    resp = client.post("/browse/build",
+                       data={k: (io.BytesIO(v), k) for k, v in files.items()},
+                       content_type="multipart/form-data")
+    assert "为负" in resp.get_data(as_text=True)
+    files = {"matrix": mtx_bytes(4, 4, []), "words": b"a\nb\nc\nd\n"}
+    resp = client.post("/browse/build",
+                       data={k: (io.BytesIO(v), k) for k, v in files.items()},
+                       content_type="multipart/form-data")
+    assert "缺少文件" in resp.get_data(as_text=True)
+    resp = client.post("/browse/build", data={},
+                       content_type="multipart/form-data")
+    assert "缺少文件" in resp.get_data(as_text=True)
+    # 查询缺词 / 缺包
+    resp = post_query(client, b"x", "")
+    assert resp.status_code == 400 and "输入要查的词" in resp.get_data(as_text=True)
+    resp = client.post("/browse/query", data={},
+                       content_type="multipart/form-data")
+    assert resp.status_code == 400 and "上传阅览包" in resp.get_data(as_text=True)
+
+
+def t_browse_memory_bounded():
+    """制包与查询的内存不随非零项数增长。"""
+    import gc
+    import random
+    import tracemalloc
+
+    random.seed(11)
+    P, W, N = 400, 300, 600_000
+    work = tempfile.mkdtemp(prefix="browse-big-")
+    path = os.path.join(work, "big.mtx")
+    with open(path, "w") as f:
+        f.write("%%MatrixMarket matrix coordinate integer general\n")
+        f.write(f"{P} {W} {N}\n")
+        for _ in range(N):
+            f.write(f"{random.randint(1, P)} {random.randint(1, W)} "
+                    f"{random.randint(0, 5)}\n")
+    pages = [f"page-{i:04d}" for i in range(P)]
+    words = [f"w-{i:04d}" for i in range(W)]
+    gc.collect()
+
+    tracemalloc.start()
+    try:
+        ds, errs = matrixio.ingest_dataset(
+            "数据", "old", open(path, "rb"),
+            io.BytesIO(("\n".join(pages) + "\n").encode()),
+            io.BytesIO(("\n".join(words) + "\n").encode()), work)
+        assert not errs, errs
+        canon = matrixio.canonicalize_dataset(ds, work)
+        pkg = os.path.join(work, "big.zip")
+        info = matrixio.build_browse_package(
+            pkg, canon["pages"], canon["words"], canon["nnz"],
+            canon["entries_path"], work)
+        assert info["blocks"] >= 1
+        with open(pkg, "rb") as f:
+            result = matrixio.query_browse_package(f, words[0])
+        assert result["status"] in ("ok", "zero_total")
+        _, peak = tracemalloc.get_traced_memory()
+        # 外包一层读取用的内存不计：build 期间在 tracemalloc 监控下
+    finally:
+        tracemalloc.stop()
+    peak_mb = peak / 1e6
+    print(f"    [nnz≈{N:,} 条输入、{info['blocks']} 块，Python 侧内存峰值 "
+          f"{peak_mb:.1f} MB]")
+    assert peak_mb < 64, f"内存峰值 {peak_mb:.1f} MB 超出 64 MB 上限"
+    # 块数符合每块至多 512 条
+    zf = zipfile.ZipFile(pkg)
+    manifest = json.loads(zf.read("manifest.json"))
+    assert all(b["rows"] <= matrixio.BLOCK_MAX_ROWS for b in manifest["blocks"])
+    assert sum(b["rows"] for b in manifest["blocks"]) == canon["nnz"]
+
+
+def _browse_raw(client, files=None):
+    resp = build_browse(client, files)
+    html = resp.get_data(as_text=True)
+    m = re.search(r'/download/browse/([A-Za-z0-9_-]+)', html)
+    assert m, html
+    return client.get("/download/browse/" + m.group(1)).data
+
+
+def mtx_bytes(rows, cols, entries):
+    return mtx(rows, cols, entries)
 
 
 def t_spooled_stream():
@@ -332,6 +664,14 @@ def main():
     check("下载链接防护", t_download_guards)
     check("SpooledTemporaryFile 流包装", t_spooled_stream)
     check("内存不随非零项数增长", t_memory_bounded)
+    check("制作阅览包 + 按词查询", t_browse_build_and_query)
+    check("起始页键 / 前 100 个 / 有无后续", t_browse_query_start_and_limits)
+    check("词表无此词 与 全卷计数为零 分开提示", t_browse_not_in_vocab_vs_zero_total)
+    check("一词可跨块 / 每块至多 512 条", t_browse_block_spans_words)
+    check("块损坏：所需块整页报错，无关块仍可查", t_browse_corrupt_blocks)
+    check("manifest 校验", t_browse_manifest_guards)
+    check("制包输入与查询参数错误", t_browse_build_errors)
+    check("制包与查询内存有界", t_browse_memory_bounded)
     print(f"\n全部通过：{len(PASSED)} 项")
 
 

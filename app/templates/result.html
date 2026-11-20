@@ -1,43 +1,7 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>核对结果 · 档案馆检索索引核对</title>
-<style>
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 2rem 1rem 4rem;
-    font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
-    background: #f5f4ef; color: #2b2b2b; line-height: 1.65;
-  }
-  main { max-width: 60rem; margin: 0 auto; }
-  h1 { font-size: 1.5rem; }
-  .panel { border-radius: 8px; padding: 1rem 1.2rem; margin: 1.2rem 0; }
-  .error { background: #fbeeec; border: 1px solid #d9a49c; }
-  .diff  { background: #fdf3e0; border: 1px solid #dfc27a; }
-  .ok    { background: #eef6ea; border: 1px solid #9cc48f; }
-  code {
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-    background: rgba(0,0,0,.06); border-radius: 4px; padding: .1em .35em;
-    word-break: break-all;
-  }
-  table { border-collapse: collapse; margin: .8rem 0; }
-  th, td { border: 1px solid #c9c2b2; padding: .35rem .9rem; text-align: left; }
-  th { background: #efece3; }
-  a.btn {
-    display: inline-block; margin-top: .6rem; padding: .6rem 1.8rem;
-    background: #4a7a3a; color: #fff; text-decoration: none; border-radius: 6px;
-    font-size: 1.05rem;
-  }
-  a.btn:hover { background: #3b6330; }
-  a.back { color: #6f5830; }
-</style>
-</head>
-<body>
-<main>
-  <h1>核对结果</h1>
-
+{% extends "base.html" %}
+{% block title %}核对结果 · 档案馆检索索引核对{% endblock %}
+{% block heading %}核对结果{% endblock %}
+{% block content %}
   {% if errors %}
   <div class="panel error">
     <h2>数据格式有误，无法核对</h2>
@@ -87,10 +51,11 @@
     <p><a class="btn" href="{{ download_url }}">下载 ZIP（旧格式 · 页×词）</a></p>
     <p>包内含按页键与词排序、重新编号的 <code>matrix.mtx</code> 及配套
        <code>pages.csv</code>、<code>words.csv</code>；解压后即可作为旧格式再次上传核对。</p>
+    <p><a class="btn" href="{{ browse_url }}">下载单文件阅览包（按词查扫描页）</a></p>
+    <p>阅览包按词编号切成 <strong>{{ browse_blocks }}</strong> 块、每块至多 512 条非零记录，
+       可独立解压；在<a href="/browse">阅览页</a>上传后输入词即可列出前 100 个非零页及计数。</p>
   </div>
   {% endif %}
 
   <p><a class="back" href="/">← 返回重新上传</a></p>
-</main>
-</body>
-</html>
+{% endblock %}

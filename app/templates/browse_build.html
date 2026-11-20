@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}制作阅览包 · 档案馆检索索引{% endblock %}
+{% block heading %}制作单文件阅览包{% endblock %}
+{% block content %}
+  <p>上传<strong>一套</strong>页×词数据（矩阵 + 页键 CSV + 词表 CSV），
+     制成为单个 ZIP 阅览包。包内词按编号切块，每块至多存 512 条非零记录、
+     可独立解压，一个词可以跨块；重复坐标与同词按原口径合计。</p>
+  <p>把阅览包拿到外馆后，在<a href="/browse">阅览页</a>上传并输入词，
+     即可按页键列出该词出现的扫描页及计数。</p>
+
+  {% if errors %}
+  <div class="panel error">
+    <h2>无法制包</h2>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div class="panel ok">
+    <h2>阅览包已生成 ✔</h2>
+    <p>共 <strong>{{ pages_count }}</strong> 页、<strong>{{ words_count }}</strong> 个不同的词、
+       <strong>{{ nnz }}</strong> 条非零记录，分为 <strong>{{ blocks }}</strong> 块。</p>
+    <p><a class="btn" href="{{ download_url }}">下载阅览包（单文件 ZIP）</a></p>
+    <p><a href="/browse">前往阅览页试用 →</a></p>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/browse/build" enctype="multipart/form-data">
+    <fieldset>
+      <legend>页×词数据</legend>
+      <label><span>矩阵 matrix.mtx（行=页，列=词）</span>
+        <input type="file" name="matrix" required></label>
+      <label><span>页键 CSV（与矩阵行一一对应）</span>
+        <input type="file" name="pages" required></label>
+      <label><span>词表 CSV（与矩阵列一一对应）</span>
+        <input type="file" name="words" required></label>
+    </fieldset>
+    <button type="submit">制作阅览包</button>
+  </form>
+
+  <section class="doc">
+    <h2>包内结构</h2>
+    <ul>
+      <li><code>manifest.json</code> —— 包标识、块数与页/词表摘要，以及每块的行数、
+        摘要和覆盖的词编号范围；</li>
+      <li><code>pages.csv</code> / <code>words.csv</code> —— 页键表与词表，第 n 行即编号 n；</li>
+      <li><code>blocks/&lt;k&gt;.csv</code> —— 每行 <code>词编号,页编号,计数</code>，
+        每块至多 512 条非零记录，可按需单独解压。</li>
+    </ul>
+    <p>词按编号连续切块，所以一个词可以跨块；查询时只需解压覆盖该词的块。
+       页键与词表按字符串排序并重新编号，重复坐标与同词按原口径合计。</p>
+  </section>
+{% endblock %}
